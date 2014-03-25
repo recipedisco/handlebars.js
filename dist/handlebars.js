@@ -250,6 +250,9 @@ var __module2__ = (function(__dependency1__, __dependency2__) {
 
       if (options.data) {
         data = createFrame(options.data);
+        if(!data.root){
+          data.root = this;
+        }
       }
 
       if(context && typeof context === 'object') {
