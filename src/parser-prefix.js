@@ -1,1 +1,1 @@
-// BEGIN(BROWSER)
+/* jshint ignore:start */
