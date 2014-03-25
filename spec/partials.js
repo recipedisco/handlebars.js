@@ -16,6 +16,21 @@ describe('partials', function() {
                     "Partials can be passed a context");
   });
 
+  it("partials with undefined context", function() {
+    var string = "Dudes: {{>dude dudes}}";
+    var partial = "{{foo}} Empty";
+    var hash = {};
+    shouldCompileToWithPartials(string, [hash, {}, {dude: partial}], true, "Dudes:  Empty");
+  });
+
+  it("partials with parameters", function() {
+    var string = "Dudes: {{#dudes}}{{> dude others=..}}{{/dudes}}";
+    var partial = "{{others.foo}}{{name}} ({{url}}) ";
+    var hash = {foo: 'bar', dudes: [{name: "Yehuda", url: "http://yehuda"}, {name: "Alan", url: "http://alan"}]};
+    shouldCompileToWithPartials(string, [hash, {}, {dude: partial}], true, "Dudes: barYehuda (http://yehuda) barAlan (http://alan) ",
+                    "Basic partials output based on current context.");
+  });
+
   it("partial in a partial", function() {
     var string = "Dudes: {{#dudes}}{{>dude}}{{/dudes}}";
     var dude = "{{name}} {{> url}} ";
@@ -25,17 +40,17 @@ describe('partials', function() {
   });
 
   it("rendering undefined partial throws an exception", function() {
-    (function() {
+    shouldThrow(function() {
         var template = CompilerContext.compile("{{> whatever}}");
         template();
-    }).should.throw(Handlebars.Exception, 'The partial whatever could not be found');
+    }, Handlebars.Exception, 'The partial whatever could not be found');
   });
 
   it("rendering template partial in vm mode throws an exception", function() {
-    (function() {
+    shouldThrow(function() {
       var template = CompilerContext.compile("{{> whatever}}");
       template();
-    }).should.throw(Handlebars.Exception, 'The partial whatever could not be found');
+    }, Handlebars.Exception, 'The partial whatever could not be found');
   });
 
   it("rendering function partial in vm mode", function() {
@@ -70,7 +85,7 @@ describe('partials', function() {
   });
 
   it("Global Partials", function() {
-    Handlebars.registerPartial('global_test', '{{another_dude}}');
+    handlebarsEnv.registerPartial('global_test', '{{another_dude}}');
 
     var string = "Dudes: {{> shared/dude}} {{> global_test}}";
     var dude = "{{name}}";
@@ -79,7 +94,7 @@ describe('partials', function() {
   });
 
   it("Multiple partial registration", function() {
-    Handlebars.registerPartial({
+    handlebarsEnv.registerPartial({
       'shared/dude': '{{name}}',
       global_test: '{{another_dude}}'
     });
@@ -116,4 +131,10 @@ describe('partials', function() {
     var hash = {name:"Jeepers", another_dude:"Creepers"};
     shouldCompileToWithPartials(string, [hash, {}, {'+404/asdf?.bar':dude}], true, "Dudes: Jeepers", "Partials can use literal paths");
   });
+
+  it('should handle empty partial', function() {
+    var string = "Dudes: {{#dudes}}{{> dude}}{{/dudes}}";
+    var partial = "";
+    var hash = {dudes: [{name: "Yehuda", url: "http://yehuda"}, {name: "Alan", url: "http://alan"}]};
+    shouldCompileToWithPartials(string, [hash, {}, {dude: partial}], true, "Dudes: ");  });
 });

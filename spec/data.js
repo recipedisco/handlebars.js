@@ -1,4 +1,4 @@
-/*global CompilerContext */
+/*global CompilerContext, Handlebars, handlebarsEnv, shouldThrow */
 describe('data', function() {
   it("passing in data to a compiled function that expects data - works with helpers", function() {
     var template = CompilerContext.compile("{{hello}}", {data: true});
@@ -19,12 +19,10 @@ describe('data', function() {
     equals("hello", result, "@foo retrieves template data");
   });
 
-  var objectCreate = Handlebars.createFrame;
-
   it("deep @foo triggers automatic top-level data", function() {
     var template = CompilerContext.compile('{{#let world="world"}}{{#if foo}}{{#if foo}}Hello {{@world}}{{/if}}{{/if}}{{/let}}');
 
-    var helpers = objectCreate(Handlebars.helpers);
+    var helpers = Handlebars.createFrame(handlebarsEnv.helpers);
 
     helpers.let = function(options) {
       var frame = Handlebars.createFrame(options.data);
@@ -87,43 +85,28 @@ describe('data', function() {
     equals("Hello undefined", result, "@foo as a parameter retrieves template data");
   });
 
-  it("parameter data throws when using this scope references", function() {
-    var string = "{{#goodbyes}}{{text}} cruel {{@./name}}! {{/goodbyes}}";
-
-    (function() {
-      CompilerContext.compile(string);
-    }).should.throw(Error);
-  });
-
-  it("parameter data throws when using parent scope references", function() {
-    var string = "{{#goodbyes}}{{text}} cruel {{@../name}}! {{/goodbyes}}";
-
-    (function() {
-      CompilerContext.compile(string);
-    }).should.throw(Error);
-  });
-
   it("parameter data throws when using complex scope references", function() {
     var string = "{{#goodbyes}}{{text}} cruel {{@foo/../name}}! {{/goodbyes}}";
 
-    (function() {
+    shouldThrow(function() {
       CompilerContext.compile(string);
-    }).should.throw(Error);
+    }, Error);
   });
 
   it("data is inherited downstream", function() {
-    var template = CompilerContext.compile("{{#let foo=bar.baz}}{{@foo}}{{/let}}", { data: true });
+    var template = CompilerContext.compile("{{#let foo=1 bar=2}}{{#let foo=bar.baz}}{{@bar}}{{@foo}}{{/let}}{{@foo}}{{/let}}", { data: true });
     var helpers = {
       let: function(options) {
+        var frame = Handlebars.createFrame(options.data);
         for (var prop in options.hash) {
-          options.data[prop] = options.hash[prop];
+          frame[prop] = options.hash[prop];
         }
-        return options.fn(this);
+        return options.fn(this, {data: frame});
       }
     };
 
     var result = template({ bar: { baz: "hello world" } }, { helpers: helpers, data: {} });
-    equals("hello world", result, "data variables are inherited downstream");
+    equals("2hello world1", result, "data variables are inherited downstream");
   });
 
   it("passing in data to a compiled function that expects data - works with helpers in partials", function() {
@@ -237,4 +220,38 @@ describe('data', function() {
     equals("sad world?", result, "Overriden data output by helper");
   });
 
+  describe('@root', function() {
+    it('the root context can be looked up via @root', function() {
+      var template = CompilerContext.compile('{{@root.foo}}');
+      var result = template({foo: 'hello'}, { data: {} });
+      equals('hello', result);
+
+      result = template({foo: 'hello'}, {});
+      equals('hello', result);
+    });
+    it('passed root values take priority', function() {
+      var template = CompilerContext.compile('{{@root.foo}}');
+      var result = template({}, { data: {root: {foo: 'hello'} } });
+      equals('hello', result);
+    });
+  });
+
+  describe('nesting', function() {
+    it('the root context can be looked up via @root', function() {
+      var template = CompilerContext.compile('{{#helper}}{{#helper}}{{@./depth}} {{@../depth}} {{@../../depth}}{{/helper}}{{/helper}}');
+      var result = template({foo: 'hello'}, {
+        helpers: {
+          helper: function(options) {
+            var frame = Handlebars.createFrame(options.data);
+            frame.depth = options.data.depth + 1;
+            return options.fn(this, {data: frame});
+          }
+        },
+        data: {
+          depth: 0
+        }
+      });
+      equals('2 1 0', result);
+    });
+  });
 });

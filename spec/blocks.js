@@ -20,7 +20,7 @@ describe('blocks', function() {
 
     equal(result, "0. goodbye! 1. Goodbye! 2. GOODBYE! cruel world!", "The @index variable is used");
   });
-
+  
   it("empty block", function() {
     var string   = "{{#goodbyes}}{{/goodbyes}}cruel {{world}}!";
     var hash     = {goodbyes: [{text: "goodbye"}, {text: "Goodbye"}, {text: "GOODBYE"}], world: "world"};
@@ -42,9 +42,9 @@ describe('blocks', function() {
   it("block with complex lookup using nested context", function() {
     var string = "{{#goodbyes}}{{text}} cruel {{foo/../name}}! {{/goodbyes}}";
 
-    (function() {
+    shouldThrow(function() {
       CompilerContext.compile(string);
-    }).should.throw(Error);
+    }, Error);
   });
 
   it("block with deep nested complex lookup", function() {

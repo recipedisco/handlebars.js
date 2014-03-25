@@ -1,14 +1,6 @@
 {
     "predef": [
         "console",
-        "Ember",
-        "DS",
-        "Handlebars",
-        "Metamorph",
-        "ember_assert",
-        "ember_warn",
-        "ember_deprecate",
-        "ember_deprecateFunc",
         "require",
         "suite",
         "equal",
@@ -22,25 +14,28 @@
         "ok",
         "strictEqual",
         "module",
+        "define",
 
         "describe",
         "it",
-        "afterEach"
+        "afterEach",
+        "beforeEach"
     ],
 
     "node" : true,
-    "es5" : true,
     "browser" : true,
+    "esnext": true,
 
     "boss" : true,
     "curly": false,
     "debug": false,
     "devel": false,
     "eqeqeq": false,
+    "eqnull": true,
     "evil": true,
     "forin": false,
     "immed": false,
-    "laxbreak": false,
+    "laxbreak": true,
     "newcap": true,
     "noarg": true,
     "noempty": false,

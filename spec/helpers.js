@@ -1,4 +1,4 @@
-/*global CompilerContext, shouldCompileTo, shouldCompileToWithPartials */
+/*global CompilerContext, Handlebars, shouldCompileTo, shouldCompileToWithPartials, shouldThrow, handlebarsEnv */
 describe('helpers', function() {
   it("helper with complex lookup$", function() {
     var string = "{{#goodbyes}}{{{link ../prefix}}}{{/goodbyes}}";
@@ -9,6 +9,26 @@ describe('helpers', function() {
     shouldCompileTo(string, [hash, helpers], "<a href='/root/goodbye'>Goodbye</a>");
   });
 
+  it("helper for raw block gets raw content", function() {
+    var string   = "{{{{raw}}}} {{test}} {{{{/raw}}}}";
+    var hash = { test: "hello" };
+    var helpers = { raw: function(options) {
+        return options.fn();
+    } };
+    shouldCompileTo(string, [hash, helpers], " {{test}} ",
+                    "raw block helper gets raw content");
+  });
+  
+  it("helper for raw block gets parameters", function() {
+    var string   = "{{{{raw 1 2 3}}}} {{test}} {{{{/raw}}}}";
+    var hash = { test: "hello" };
+    var helpers = { raw: function(a, b, c, options) {
+        return options.fn() + a + b + c;
+    } };
+    shouldCompileTo(string, [hash, helpers], " {{test}} 123",
+                    "raw block helper gets raw content");
+  });
+  
   it("helper block with complex lookup expression", function() {
     var string = "{{#goodbyes}}{{../name}}{{/goodbyes}}";
     var hash = {name: "Alan"};
@@ -161,7 +181,7 @@ describe('helpers', function() {
     });
 
     it("the helper hash should augment the global hash", function() {
-      Handlebars.registerHelper('test_helper', function() { return 'found it!'; });
+      handlebarsEnv.registerHelper('test_helper', function() { return 'found it!'; });
 
       shouldCompileTo(
         "{{test_helper}} {{#if cruel}}Goodbye {{cruel}} {{world}}!{{/if}}", [
@@ -173,25 +193,32 @@ describe('helpers', function() {
   });
 
   it("Multiple global helper registration", function() {
-    var helpers = Handlebars.helpers;
-    try {
-      Handlebars.helpers = {};
-      Handlebars.registerHelper({
-        'if': helpers['if'],
-        world: function() { return "world!"; },
-        test_helper: function() { return 'found it!'; }
-      });
+    var helpers = handlebarsEnv.helpers;
+    handlebarsEnv.helpers = {};
 
-      shouldCompileTo(
-        "{{test_helper}} {{#if cruel}}Goodbye {{cruel}} {{world}}!{{/if}}",
-        [{cruel: "cruel"}],
-        "found it! Goodbye cruel world!!");
-    } finally {
-      if (helpers) {
-        Handlebars.helpers = helpers;
-      }
-    }
+    handlebarsEnv.registerHelper({
+      'if': helpers['if'],
+      world: function() { return "world!"; },
+      test_helper: function() { return 'found it!'; }
+    });
+
+    shouldCompileTo(
+      "{{test_helper}} {{#if cruel}}Goodbye {{cruel}} {{world}}!{{/if}}",
+      [{cruel: "cruel"}],
+      "found it! Goodbye cruel world!!");
   });
+
+  it("decimal number literals work", function() {
+    var string   = 'Message: {{hello -1.2 1.2}}';
+    var hash     = {};
+    var helpers  = {hello: function(times, times2) {
+      if(typeof times !== 'number') { times = "NaN"; }
+      if(typeof times2 !== 'number') { times2 = "NaN"; }
+      return "Hello " + times + " " + times2 + " times";
+    }};
+    shouldCompileTo(string, [hash, helpers], "Message: Hello -1.2 1.2 times", "template with a negative integer literal");
+  });
+
   it("negative number literals work", function() {
     var string   = 'Message: {{hello -12}}';
     var hash     = {};
@@ -216,10 +243,10 @@ describe('helpers', function() {
     });
 
     it("using a quote in the middle of a parameter raises an error", function() {
-      (function() {
-        var string   = 'Message: {{hello wo"rld"}}';
+      var string   = 'Message: {{hello wo"rld"}}';
+      shouldThrow(function() {
         CompilerContext.compile(string);
-      }).should.throw(Error);
+      }, Error);
     });
 
     it("escaping a String is possible", function(){
@@ -355,10 +382,10 @@ describe('helpers', function() {
 
   describe("helperMissing", function() {
     it("if a context is not found, helperMissing is used", function() {
-      (function() {
+      shouldThrow(function() {
           var template = CompilerContext.compile("{{hello}} {{link_to world}}");
           template({});
-      }).should.throw(/Missing helper: 'link_to'/);
+      }, undefined, /Missing helper: 'link_to'/);
     });
 
     it("if a context is not found, custom helperMissing is used", function() {
@@ -366,9 +393,9 @@ describe('helpers', function() {
       var context = { hello: "Hello", world: "world" };
 
       var helpers = {
-        helperMissing: function(helper, context) {
-          if(helper === "link_to") {
-            return new Handlebars.SafeString("<a>" + context + "</a>");
+        helperMissing: function(mesg, options) {
+          if(options.name === "link_to") {
+            return new Handlebars.SafeString("<a>" + mesg + "</a>");
           }
         }
       };
@@ -421,9 +448,9 @@ describe('helpers', function() {
       equal(result, "bar", "'bar' should === '" + result);
     });
     it("Unknown helper call in knownHelpers only mode should throw", function() {
-      (function() {
+      shouldThrow(function() {
         CompilerContext.compile("{{typeof hello}}", {knownHelpersOnly: true});
-      }).should.throw(Error);
+      }, Error);
     });
   });
 
@@ -437,6 +464,43 @@ describe('helpers', function() {
       var string = "{{#truthy}}yep{{/truthy}}";
       var boundData = { truthy: function() { return this.truthiness(); }, truthiness: function() { return false; } };
       shouldCompileTo(string, boundData, "");
+    });
+  });
+
+  describe('name field', function() {
+    var context = {};
+    var helpers = {
+      blockHelperMissing: function() {
+        return 'missing: ' + arguments[arguments.length-1].name;
+      },
+      helper: function() {
+        return 'ran: ' + arguments[arguments.length-1].name;
+      }
+    };
+
+    it('should include in ambiguous mustache calls', function() {
+      shouldCompileTo('{{helper}}', [context, helpers], 'ran: helper');
+    });
+    it('should include in helper mustache calls', function() {
+      shouldCompileTo('{{helper 1}}', [context, helpers], 'ran: helper');
+    });
+    it('should include in ambiguous block calls', function() {
+      shouldCompileTo('{{#helper}}{{/helper}}', [context, helpers], 'ran: helper');
+    });
+    it('should include in simple block calls', function() {
+      shouldCompileTo('{{#./helper}}{{/./helper}}', [context, helpers], 'missing: ./helper');
+    });
+    it('should include in helper block calls', function() {
+      shouldCompileTo('{{#helper 1}}{{/helper}}', [context, helpers], 'ran: helper');
+    });
+    it('should include in known helper calls', function() {
+      var template = CompilerContext.compile("{{helper}}", {knownHelpers: {'helper': true}, knownHelpersOnly: true});
+
+      equal(template({}, {helpers: helpers}), 'ran: helper');
+    });
+
+    it('should include full id', function() {
+      shouldCompileTo('{{#foo.helper}}{{/foo.helper}}', [{foo: {}}, helpers], 'missing: foo.helper');
     });
   });
 
@@ -495,7 +559,7 @@ describe('helpers', function() {
 
         cruel: function(world) {
           return "cruel " + world.toUpperCase();
-        },
+        }
       };
 
       var context = {
@@ -517,7 +581,7 @@ describe('helpers', function() {
 
         cruel: function(world) {
           return "cruel " + world.toUpperCase();
-        },
+        }
       };
 
       var context = {

@@ -1,4 +1,4 @@
-/*global CompilerContext, shouldCompileTo */
+/*global CompilerContext, Handlebars, shouldCompileTo, shouldThrow */
 describe('Regressions', function() {
   it("GH-94: Cannot read property of undefined", function() {
     var data = {"books":[{"title":"The origin of species","author":{"name":"Charles Darwin"}},{"title":"Lazarillo de Tormes"}]};
@@ -85,12 +85,19 @@ describe('Regressions', function() {
   });
 
   it('GH-437: Matching escaping', function() {
-    (function() {
+    shouldThrow(function() {
       CompilerContext.compile('{{{a}}');
-    }).should.throw(Error);
-    (function() {
+    }, Error);
+    shouldThrow(function() {
       CompilerContext.compile('{{a}}}');
-    }).should.throw(Error);
+    }, Error);
+  });
+
+  it("GH-676: Using array in escaping mustache fails", function() {
+    var string = "{{arr}}";
+    var data = { "arr": [1,2] };
+
+    shouldCompileTo(string, data, data.arr.toString(), "it works as expected");
   });
 
   it("Mustache man page", function() {
@@ -106,14 +113,18 @@ describe('Regressions', function() {
   });
 
   it("Passing falsy values to Handlebars.compile throws an error", function() {
-    (function() {
+    shouldThrow(function() {
       CompilerContext.compile(null);
-    }).should.throw("You must pass a string or Handlebars AST to Handlebars.precompile. You passed null");
+    }, Error, 'You must pass a string or Handlebars AST to Handlebars.precompile. You passed null');
   });
 
   if (Handlebars.AST) {
     it("can pass through an already-compiled AST via compile/precompile", function() {
       equal(Handlebars.compile(new Handlebars.AST.ProgramNode([ new Handlebars.AST.ContentNode("Hello")]))(), 'Hello');
+    });
+
+    it("can pass through an empty string", function() {
+      equal(Handlebars.compile('')(), '');
     });
   }
 });

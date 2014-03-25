@@ -75,10 +75,19 @@ var optimist = require('optimist')
         'type': 'boolean',
         'description': 'Removes the BOM (Byte Order Mark) from the beginning of the templates.',
         'alias': 'bom'
+      },
+      'v': {
+        'type': 'boolean',
+        'description': 'Prints the current compiler version',
+        'alias': 'version'
       }
     })
 
     .check(function(argv) {
+      if (argv.version) {
+        return;
+      }
+
       var template = [0];
       if (!argv._.length) {
         throw 'Must define at least one template or directory.';
@@ -102,12 +111,16 @@ var optimist = require('optimist')
     });
 
 var fs = require('fs'),
-    handlebars = require('../lib/handlebars'),
+    handlebars = require('../lib'),
     basename = require('path').basename,
     uglify = require('uglify-js');
 
 var argv = optimist.argv,
     template = argv._[0];
+
+if (argv.version) {
+  return console.log(handlebars.VERSION);
+}
 
 // Convert the known list into a hash
 var known = {};
@@ -127,7 +140,7 @@ extension = new RegExp('\\.' + extension + '$');
 var output = [];
 if (!argv.simple) {
   if (argv.amd) {
-    output.push('define([\'' + argv.handlebarPath + 'handlebars\'], function(Handlebars) {\n');
+    output.push('define([\'' + argv.handlebarPath + 'handlebars.runtime\'], function(Handlebars) {\n  Handlebars = Handlebars["default"];');
   } else if (argv.commonjs) {
     output.push('var Handlebars = require("' + argv.commonjs + '");');
   } else {
@@ -139,7 +152,7 @@ if (!argv.simple) {
   output.push(argv.namespace);
   output.push(' || {};\n');
 }
-function processTemplate(template, root) {
+function processTemplate(template, root, explicit) {
   var path = template,
       stat = fs.statSync(path);
   if (stat.isDirectory()) {
@@ -150,9 +163,9 @@ function processTemplate(template, root) {
         processTemplate(path, root || template);
       }
     });
-  } else {
+  } else if (explicit || extension.test(path)) {
     var data = fs.readFileSync(path, 'utf8');
-    
+
     if (argv.bom && data.indexOf('\uFEFF') === 0) {
       data = data.substring(1);
     }
@@ -191,7 +204,7 @@ function processTemplate(template, root) {
 }
 
 argv._.forEach(function(template) {
-  processTemplate(template, argv.root);
+  processTemplate(template, argv.root, true);
 });
 
 // Output the content

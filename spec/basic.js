@@ -1,3 +1,10 @@
+/*global CompilerContext, Handlebars, beforeEach, shouldCompileTo */
+global.handlebarsEnv = null;
+
+beforeEach(function() {
+  global.handlebarsEnv = Handlebars.create();
+});
+
 describe("basic context", function() {
   it("most basic", function() {
     shouldCompileTo("{{foo}}", { foo: "foo" }, "foo");
@@ -5,13 +12,21 @@ describe("basic context", function() {
 
   it("escaping", function() {
     shouldCompileTo("\\{{foo}}", { foo: "food" }, "{{foo}}");
+    shouldCompileTo("content \\{{foo}}", { foo: "food" }, "content {{foo}}");
     shouldCompileTo("\\\\{{foo}}", { foo: "food" }, "\\food");
+    shouldCompileTo("content \\\\{{foo}}", { foo: "food" }, "content \\food");
     shouldCompileTo("\\\\ {{foo}}", { foo: "food" }, "\\\\ food");
   });
 
   it("compiling with a basic context", function() {
     shouldCompileTo("Goodbye\n{{cruel}}\n{{world}}!", {cruel: "cruel", world: "world"}, "Goodbye\ncruel\nworld!",
                     "It works if all the required keys are provided");
+  });
+
+  it("compiling with an undefined context", function() {
+    shouldCompileTo("Goodbye\n{{cruel}}\n{{world.bar}}!", undefined, "Goodbye\n\n!");
+
+    shouldCompileTo("{{#unless foo}}Goodbye{{../test}}{{test2}}{{/unless}}", undefined, "Goodbye");
   });
 
   it("comments", function() {
@@ -82,6 +97,46 @@ describe("basic context", function() {
           frank: "Frank"},
         "Frank", "functions are called with context arguments");
   });
+  it("pathed functions with context argument", function() {
+    shouldCompileTo("{{bar.awesome frank}}",
+        {bar: {awesome: function(context) { return context; }},
+          frank: "Frank"},
+        "Frank", "functions are called with context arguments");
+  });
+  it("depthed functions with context argument", function() {
+    shouldCompileTo("{{#with frank}}{{../awesome .}}{{/with}}",
+        {awesome: function(context) { return context; },
+          frank: "Frank"},
+        "Frank", "functions are called with context arguments");
+  });
+
+  it("block functions with context argument", function() {
+    shouldCompileTo("{{#awesome 1}}inner {{.}}{{/awesome}}",
+        {awesome: function(context, options) { return options.fn(context); }},
+        "inner 1", "block functions are called with context and options");
+  });
+
+  it("depthed block functions with context argument", function() {
+    shouldCompileTo("{{#with value}}{{#../awesome 1}}inner {{.}}{{/../awesome}}{{/with}}",
+        {value: true, awesome: function(context, options) { return options.fn(context); }},
+        "inner 1", "block functions are called with context and options");
+  });
+
+  it("block functions without context argument", function() {
+    shouldCompileTo("{{#awesome}}inner{{/awesome}}",
+        {awesome: function(options) { return options.fn(this); }},
+        "inner", "block functions are called with options");
+  });
+  it("pathed block functions without context argument", function() {
+    shouldCompileTo("{{#foo.awesome}}inner{{/foo.awesome}}",
+        {foo: {awesome: function(options) { return this; }}},
+        "inner", "block functions are called with options");
+  });
+  it("depthed block functions without context argument", function() {
+    shouldCompileTo("{{#with value}}{{#../awesome}}inner{{/../awesome}}{{/with}}",
+        {value: true, awesome: function(options) { return this; }},
+        "inner", "block functions are called with options");
+  });
 
 
   it("paths with hyphens", function() {
@@ -134,9 +189,9 @@ describe("basic context", function() {
 
   it("this keyword nested inside path", function() {
     var string = "{{#hellos}}{{text/this/foo}}{{/hellos}}";
-    (function() {
+    shouldThrow(function() {
       CompilerContext.compile(string);
-    }).should.throw(Error);
+    }, Error);
   });
 
   it("this keyword in helpers", function() {
@@ -155,8 +210,8 @@ describe("basic context", function() {
 
   it("this keyword nested inside helpers param", function() {
     var string = "{{#hellos}}{{foo text/this/foo}}{{/hellos}}";
-    (function() {
+    shouldThrow(function() {
       CompilerContext.compile(string);
-    }).should.throw(Error);
+    }, Error);
   });
 });
